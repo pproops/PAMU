@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function tournamentOwned(tournamentId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/tournaments/$(tournamentId))
+        && get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.ownerId
+          == request.auth.uid;
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /teams/{teamId} {
+      allow read: if tournamentOwned(resource.data.tournamentId);
+      allow create: if tournamentOwned(request.resource.data.tournamentId);
+      allow update, delete: if tournamentOwned(resource.data.tournamentId);
+    }
+
+    match /matches/{matchId} {
+      allow read: if tournamentOwned(resource.data.tournamentId);
+      allow create: if tournamentOwned(request.resource.data.tournamentId);
+      allow update, delete: if tournamentOwned(resource.data.tournamentId);
+    }
+  }
+}
